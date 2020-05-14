@@ -1,0 +1,341 @@
+\NeedsTeXFormat{LaTeX2e}[1994/06/01]
+\ProvidesPackage{xltxfix}[2020/05/14 XeLaTeX Fixes]
+
+
+\PassOptionsToPackage{tuenc}{fontspec}
+\RequirePackage{xltxtra}
+\RequirePackage{polyglossia}
+\RequirePackage{xifthen}
+
+
+\RequirePackage{calc}
+%hspace patch enabling widthof
+\def\@hspace#1{\begingroup\setlength\dimen@{#1}\hskip\dimen@\endgroup}
+
+
+%\RequirePackage{ocgx2}
+
+
+%Internal definitions
+	\newif\ifdraft
+	\draftfalse
+	\def\draft{\drafttrue}
+
+	%Trying to replace calc
+	\def\Calc#1{\input{|"echo 'scale=2; #1' | bc --"}}
+
+	%Properties
+	%\Prop{<name>}{<value>}
+	%\<name> will expand to <value>
+	%\<name>{<value>} will modify value
+	\def\Prop#1#2{%
+		\@namedef{#1@val}{#2}%
+		\protected\global\@namedef{#1}{%
+				\@ifnextchar\bgroup%
+					{\global\long\@namedef{#1@val}}%
+					{{\@nameuse{#1@val}}}%
+		}%
+	}
+	\def\PVal#1{{\@nameuse{#1@val}}}
+
+
+	%\tobp{Length units} --- expands to numeric value in bp
+	\def\tobp#1{\strip@pt\dimexpr .99626\dimexpr\strip@pt #1 pt\relax\relax}
+
+	\newcommand{\@Offset}[2]{\special{dvipdfmx:config x #1}\special{dvipdfmx:config y #2}}
+	\newcommand{\@CompressionLevel}[1]{\special{dvipdfmx:config z #1}}
+	\newcommand{\@EmbedFonts}{\special{dvipdfmx:config E}}
+	\newcommand{\@Monochrome}{\special{dvipdfmx:config c}}
+
+
+%Symbols
+	\newcommand{\Percent}{\%}
+	
+	%Currency symbols [U+20A0; U+20CF]
+	\def\Euro{\symbol{"20AC}}
+	\def\Ruble{\symbol{"20BD}}
+	\def\Bitcoin{\symbol{"20BF}}
+	
+	%Letterlike symbols [U+2100; U+214F]
+	\def\Celsius{\symbol{"2103}}
+	\def\EulerConst{\symbol{"2107}}
+	\def\Fahrenheit{\symbol{"2109}}
+	\def\PlanckConst{\symbol{"210E}}
+	\def\PlanckNormal{\symbol{"210F}}
+	\def\Numero{\symbol{"2116}}
+	\def\Prescription{\symbol{"211E}}
+	\def\Trademark{\symbol{"2132}}
+	\def\Ohm{\symbol{"2126}}
+	\def\Kelvin{\symbol{"212A}}
+	\def\Angstrom{\symbol{"212B}}
+	
+	%Number forms [U+2150; U+218F]
+	\def\uROMAN#1{\expandafter\@uROMAN\@nameuse{c@#1}}
+	\def\@uROMAN#1{%
+	\ifcase#1\or
+		\symbol{"2160}\or \symbol{"2161}\or \symbol{"2162}\or \symbol{"2163}\or
+		\symbol{"2164}\or \symbol{"2165}\or \symbol{"2166}\or \symbol{"2167}\or
+		\symbol{"2168}\or \symbol{"2169}\or \symbol{"216A}\or \symbol{"216B}
+	\else
+		\expandafter\@slowuROMAN\romannumeral #1@
+	\fi
+	}
+	\def\@slowuROMAN#1{\ifx @#1%
+	\else
+		\ifi #1?\else\if v#1?\else\if x#1?\else\if
+       l#1?\else\if c#1?\else\if d#1?\else \if
+       m#1?\else#1\fi\fi\fi\fi\fi\fi\fi
+       \expandafter\@slowuROMAN
+     \fi
+	}
+	
+	\def\uRoman#1{\@uRoman\@nameuse{c@#1}}
+	\def\@uRoman#1{%
+	\ifcase#1\or
+		\symbol{"2170}\or \symbol{"2171}\or \symbol{"2172}\or \symbol{"2173}\or
+		\symbol{"2174}\or \symbol{"2175}\or \symbol{"2176}\or \symbol{"2177}\or
+		\symbol{"2178}\or \symbol{"2179}\or \symbol{"217A}\or \symbol{"217B}
+	\else
+		\expandafter\@slowuRoman\romannumeral #1@
+	\fi
+	}
+	\def\@slowuRoman#1{\ifx @#1%
+	\else
+       \if i#1?\else\if v#1?\else\if x#1?\else\if
+       l#1?\else\if c#1?\else\if d#1?\else \if
+       m#1?\else#1\fi\fi\fi\fi\fi\fi\fi
+       \expandafter\@slowuRoman
+     \fi
+	}
+	
+	%Enclosed alphanumerics [U+2460; U+24FF]
+	\def\CircledN#1{\@CircledN\@nameuse{c@#1}}
+	\def\@CircledN#1{%
+	\ifnum#1<21
+		\ifnum#1>0
+			\symbol{\numexpr"2460+#1\relax}
+		\else
+			\@ctrerr
+		\fi
+	\else
+		\@ctrerr
+	\fi
+	}
+	
+	\def\ParenthN#1{\@ParenthN\@nameuse{c@#1}}
+	\def\@ParenthN#1{%
+	\ifnum#1<21
+		\ifnum#1>0
+			\symbol{\numexpr"2474+#1\relax}
+		\else
+			\@ctrerr
+		\fi
+	\else
+		\@ctrerr
+	\fi
+	}
+	
+	\def\NumStop#1{\@NumStop\@nameuse{c@#1}}
+	\def\@NumStop#1{%
+	\ifnum#1<21
+		\ifnum#1>0
+			\symbol{\numexpr"2488+#1\relax}
+		\else
+			\@ctrerr
+		\fi
+	\else
+		\@ctrerr
+	\fi
+	}
+
+
+%Layout
+	%\newpagestyle{Pagestyle name}{Odd headline}{Even headline}{Odd footline}{Even footline}
+	\newcommand{\newpagestyle}[5]{%
+		\global\@namedef{ps@#1}{%
+			\ifthenelse{\isempty{#2}}%
+				{\let\@oddhead\@empty}%
+				{\gdef\@oddhead{\reset@font#2}}%
+			\ifthenelse{\isempty{#3}}%
+				{\let\@evenhead\@empty}%
+				{\gdef\@evenhead{\reset@font#3}}%
+			\ifthenelse{\isempty{#4}}%
+				{\let\@oddfoot\@empty}%
+				{\gdef\@oddfoot{\reset@font#4}}%
+			\ifthenelse{\isempty{#5}}%
+				{\let\@evenfoot\@empty}%
+				{\gdef\@evenfoot{\reset@font#5}}%
+		}%
+	}
+
+	\def\HPad#1#2{\hspace{#1}#2\hspace{#1}}
+
+	%Horizontaly centered vbox
+	\newcommand{\HCenter}[1]{\hbox{}\hfill\hbox{\vbox{#1}}\hfill\hbox{}}
+	\def\Line#1{\@@line{#1}}
+
+
+%Paragraps
+	%Quote
+	\def\Quote@Font{\itshape}
+	\newlength{\Quote@VPad}
+	\setlength{\Quote@VPad}{1ex}
+	\newcommand{\Quote}[1]{%
+		\ifvmode\else\par\fi\vspace{\Quote@VPad}\noindent%
+		\HCenter{\parbox{0.8\linewidth}{\noindent\Quote@Font "#1"}}%
+		\par\vspace{\Quote@VPad}%
+	}
+
+
+%Special elements
+	\newlength{\rulethickness}
+	\setlength{\rulethickness}{0.4 pt}
+	
+	%Underline
+	\newsavebox\ulbox
+	\newlength{\uldp}
+	\setlength{\uldp}{1.1bp}
+	\def\ul#1{\leavevmode\sbox{\ulbox}{#1}\special{pdf:content \tobp{\rulethickness} w 2 J 0 -\tobp{\uldp} m \tobp{\wd\ulbox} -\tobp{\uldp} l s}\usebox{\ulbox}}
+
+	%Underline with subscript text
+	\newsavebox\ulbbox
+	\def\ulb#1#2{\ul{#1}\sbox{\ulbbox}{#2}\raisebox{-\ht\ulbbox-0.5\dp\ulbbox}[0pt][0pt]{\smash{\llap{\usebox{\ulbbox}\hspace{0.5\wd\ulbox-0.5\wd\ulbbox}}}}}
+
+	%Equations
+	\newcounter{nEquation}[section]
+	\newcommand{\Equation}[1]{\vspace{3ex}\stepcounter{nEquation}\@@line{\hfill\hbox{#1}\hfill\llap{Equation (\arabic{section}.\arabic{nEquation})}}\vspace{3ex}}
+
+
+\newcommand{\newprop}[1]{\newcommand*{#1}[1]{\renewcommand*{#1}{##1}}}
+
+%Basic PDF Info
+\Prop{Title}{Untitled}
+\Prop{Author}{Unknown}
+\Prop{Subject}{Unknown}
+\Prop{Keywords}{Unknown}
+\Prop{Creator}{XeLaTeX with xltxfix package}
+\Prop{Producer}{Unknown}
+
+%GraphicsState
+\newcommand{\StatePush}{\special{pdf:code q }}
+\newcommand{\StatePop}{\special{pdf:code Q }}
+\newcommand{\StateLineWidth}[1]{\special{pdf:code #1 w }}
+\newcommand{\StateCapDefault}{\special{pdf:code 0 j }}
+\newcommand{\StateCapRound}{\special{pdf:code 1 j }}
+\newcommand{\StateCapSquare}{\special{pdf:code 2 j }}
+\newcommand{\StateJoinDefault}{\special{pdf:code 0 J }}
+\newcommand{\StateJoinRound}{\special{pdf:code 1 J }}
+\newcommand{\StateJoinBevel}{\special{pdf:code 2 J }}
+\newcommand{\StateMiterLimit}[1]{\special{pdf:code #1 M }}
+
+%Color
+\newcommand{\ColorStrokeG}[1]{\special{pdf:code #1 G }}
+\newcommand{\ColorG}[1]{\special{pdf:code #1 g }}
+
+\newcommand{\ColorStrokeRGB}[3]{\special{pdf:code #1 #2 #3 RG }}
+\newcommand{\ColorRGB}[3]{\special{pdf:code #1 #2 #3 rg }}
+
+\newcommand{\ColorStrokeCMYK}[4]{\special{pdf:code #1 #2 #3 #4 K }}
+\newcommand{\ColorCMYK}[4]{\special{pdf:code #1 #2 #3 #4 k }}
+
+%PathConstruction
+\newcommand{\PathBegin}[2]{\special{pdf:code #1 #2 m }}
+\newcommand{\PathTo}[2]{\special{pdf:code #1 #2 l }}
+\newcommand{\PathCubicOne}[6]{\special{pdf:code #1 #2 #3 #4 #5 #6 c }}
+\newcommand{\PathCubicTwo}[4]{\special{pdf:code #1 #2 #3 #4 v }}
+\newcommand{\PathCubicThree}[4]{\special{pdf:code #1 #2 #3 #4 y }}
+\newcommand{\PathClose}{\special{pdf:code h }}
+\newcommand{\PathRectangle}[4]{\special{pdf:code #1 #2 #3 #4 re }}
+
+%PathPainting
+\newcommand{\PathStroke}{\special{pdf:code S }}
+\newcommand{\PathCloseStroke}{\special{pdf:code s }}
+\newcommand{\PathFill}{\special{pdf:code F }}
+\newcommand{\PathFillStroke}{\special{pdf:code B }}
+\newcommand{\PathCloseFillStroke}{\special{pdf:code b }}
+
+%Images
+%Supported formats: pdf, jpeg, jpeg2000, png and bmp
+%Options: 
+%	width 100bp
+%	height 100bp
+%	depth 100bp
+%	bbox 0 0 100 100
+%	scale 2
+%	xscale 0.5
+%	yscale 0.5
+%	rotate 45
+%	matrix 1 0 0 1 100 100
+\newcommand{\Image}[2]{
+	\ifdraft\else
+		\special{pdf:image #1 (#2)}
+	\fi
+}
+%Image as box
+%Options:
+%	width <dimen>
+%	height <dimen>
+%	scaled <scalefactor>
+%	xscaled <scalefactor>
+%	yscaled <scalefactor>
+%	rotated <degrees>
+\newcommand{\XImage}[2]{
+	\ifdraft\else
+		\XeTeXpicfile "#2" #1
+	\fi
+}
+
+
+\newbox\XTempBox
+\def\XObj#1#2#3#4{%
+	\setbox\XTempBox\hbox{%
+		\special{pdf:bxobj @#3 width #1 height #2}%
+		\vbox spread 4bp {\hsize=#1 #4}%
+		\special{pdf:exobj}%
+	}%
+	\wd\XTempBox=0bp\ht\XTempBox=0bp\dp\XTempBox=0bp%
+	\box\XTempBox%
+}
+
+\def\XObjUse#1{\special{pdf:uxobj @#1}}
+
+\def\ColorRGBNew#1#2#3#4{\@namedef{ColorRGB@#4}{#1 #2 #3}}
+\def\ColorRGBVal#1{\@nameuse{ColorRGB@#1}}
+\def\ColorRGBUse#1{\special{pdf:code \@nameuse{ColorRGB@#1} rg }}
+
+\def\BIgnore{%
+	\let\Old@bfseries\bfseries%
+	\let\Old@large\large%
+	%
+	\let\bfseries\@empty%
+	\let\large\@empty%
+}
+
+\def\EIgnore{
+	\let\bfseries\Old@bfseries%
+	\let\large\Old@large%
+}
+
+\AtBeginDocument{
+	\special{dvipdfmx:config V 7}
+
+	\BIgnore
+	\special{pdf: docinfo <<%
+		/Author(\Author@val)%
+		/Title(\Title@val)%
+		/Keywords(\Keywords@val)%
+		/Subject(\Subject@val)%
+		/Creator(\Creator@val)%
+	>>}
+	\EIgnore
+
+
+	\ifdraft
+		\@CompressionLevel{0}
+	\else
+		\@CompressionLevel{9}
+		%\@EmbedFonts	%Disabled, because it will break compiltion due to bug in some versions of xdvipdfmx
+	\fi
+}
+
+\endinput
